@@ -70,10 +70,14 @@ class TransactionForm(forms.ModelForm):
             categories = Category.objects.none()
 
         selected_type = self.data.get('type')
+        if not selected_type:
+            selected_type = self.initial.get('type')
         if not selected_type and self.instance.pk:
             selected_type = self.instance.type
         if selected_type:
             categories = categories.filter(type=selected_type)
+        else:
+            categories = categories.none()
 
         self.fields['category'].queryset = categories.order_by('name')
 

@@ -9,6 +9,7 @@
             <h1 class="h5 mb-3">{{ view.object|yesno:'Editar categoria,Nova categoria' }}</h1>
             <form method="post" novalidate>
                 {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.POST.next|default:request.GET.next }}">
                 {% for field in form %}
                     <div class="mb-3">
                         <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>

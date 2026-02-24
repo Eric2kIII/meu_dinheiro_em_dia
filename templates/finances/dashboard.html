@@ -51,7 +51,9 @@
         <div class="card p-3 h-100">
             <h3 class="h6 mb-3">Despesas por categoria</h3>
             {% if expense_values %}
-                <canvas id="expenseChart" height="220"></canvas>
+                <div class="chart-container">
+                    <canvas id="expenseChart"></canvas>
+                </div>
             {% else %}
                 <div class="empty-state">Nenhuma despesa encontrada para o periodo.</div>
             {% endif %}
@@ -60,7 +62,9 @@
     <div class="col-lg-7">
         <div class="card p-3 h-100">
             <h3 class="h6 mb-3">Evolucao dos ultimos 6 meses</h3>
-            <canvas id="evolutionChart" height="220"></canvas>
+            <div class="chart-container">
+                <canvas id="evolutionChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
@@ -133,6 +137,8 @@
                 }],
             },
             options: {
+                responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { position: 'bottom' },
                 },
