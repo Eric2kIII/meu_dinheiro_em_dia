@@ -1,0 +1,84 @@
+﻿:root {
+    --app-bg: #f3f6f8;
+    --app-surface: #ffffff;
+    --app-primary: #1f6f8b;
+    --app-primary-dark: #164d63;
+    --app-text: #172026;
+    --app-muted: #6c7a84;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Manrope', sans-serif;
+    color: var(--app-text);
+    background:
+        radial-gradient(circle at 10% 0%, rgba(31, 111, 139, 0.12), transparent 35%),
+        radial-gradient(circle at 90% 10%, rgba(34, 139, 34, 0.08), transparent 35%),
+        var(--app-bg);
+}
+
+.app-navbar {
+    background: linear-gradient(120deg, var(--app-primary-dark), var(--app-primary));
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.app-main {
+    padding-top: 6.2rem;
+    padding-bottom: 2rem;
+}
+
+.card {
+    border: 0;
+    border-radius: 1rem;
+    background: var(--app-surface);
+    box-shadow: 0 12px 28px rgba(23, 32, 38, 0.08);
+}
+
+.form-control,
+.form-select {
+    border-radius: 0.75rem;
+}
+
+.btn {
+    border-radius: 0.75rem;
+}
+
+.btn-primary {
+    background-color: var(--app-primary);
+    border-color: var(--app-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--app-primary-dark);
+    border-color: var(--app-primary-dark);
+}
+
+.table > :not(caption) > * > * {
+    padding-top: 0.8rem;
+    padding-bottom: 0.8rem;
+}
+
+.empty-state {
+    padding: 1rem;
+    border: 1px dashed #cfd8de;
+    border-radius: 0.75rem;
+    color: var(--app-muted);
+    background-color: #fbfdff;
+}
+
+.pagination .page-link {
+    border-radius: 0.6rem;
+    margin-right: 0.35rem;
+}
+
+@media (max-width: 768px) {
+    .app-main {
+        padding-top: 5.6rem;
+    }
+}

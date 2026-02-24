@@ -1,0 +1,19 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Excluir lancamento | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <h1 class="h5 mb-3">Excluir lancamento</h1>
+            <p class="mb-4">Confirma a exclusao do lancamento de <strong>R$ {{ object.amount|floatformat:2 }}</strong> em {{ object.date|date:'d/m/Y' }}?</p>
+            <form method="post">
+                {% csrf_token %}
+                <button class="btn btn-danger" type="submit"><i class="bi bi-trash me-1"></i>Excluir</button>
+                <a class="btn btn-outline-secondary" href="{% url 'finances:transaction_list' %}">Cancelar</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

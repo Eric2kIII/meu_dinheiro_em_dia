@@ -1,0 +1,32 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Entrar | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card p-4">
+            <h1 class="h4 mb-3">Acesse sua conta</h1>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                {% if form.non_field_errors %}
+                    <div class="text-danger small mb-3">{{ form.non_field_errors|join:', ' }}</div>
+                {% endif %}
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Entrar
+                </button>
+            </form>
+            <p class="small text-muted mt-3 mb-0">Nao possui conta? <a href="{% url 'accounts:signup' %}">Crie aqui</a>.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

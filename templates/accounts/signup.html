@@ -1,0 +1,32 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Criar conta | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card p-4">
+            <h1 class="h4 mb-3">Criar nova conta</h1>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="small text-muted mt-1">{{ field.help_text|safe }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="bi bi-person-plus me-1"></i>Criar conta
+                </button>
+            </form>
+            <p class="small text-muted mt-3 mb-0">Ja possui conta? <a href="{% url 'accounts:login' %}">Entrar</a>.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

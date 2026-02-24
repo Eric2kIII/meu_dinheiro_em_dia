@@ -1,0 +1,64 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Lancamento | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <h1 class="h5 mb-3">{{ view.object|yesno:'Editar lancamento,Novo lancamento' }}</h1>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.type.id_for_label }}">{{ form.type.label }}</label>
+                        {{ form.type }}
+                        {% if form.type.errors %}<div class="text-danger small mt-1">{{ form.type.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+                        {{ form.amount }}
+                        {% if form.amount.errors %}<div class="text-danger small mt-1">{{ form.amount.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
+                        {{ form.date }}
+                        {% if form.date.errors %}<div class="text-danger small mt-1">{{ form.date.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+                        {{ form.category }}
+                        {% if form.category.errors %}<div class="text-danger small mt-1">{{ form.category.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            {{ form.is_recurring }}
+                            <label class="form-check-label" for="{{ form.is_recurring.id_for_label }}">{{ form.is_recurring.label }}</label>
+                        </div>
+                        {% if form.is_recurring.errors %}<div class="text-danger small mt-1">{{ form.is_recurring.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                </div>
+
+                {% if form.non_field_errors %}
+                    <div class="text-danger small mt-3">{{ form.non_field_errors|join:', ' }}</div>
+                {% endif %}
+
+                <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-check2 me-1"></i>Salvar</button>
+                    <a class="btn btn-outline-secondary" href="{% url 'finances:transaction_list' %}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

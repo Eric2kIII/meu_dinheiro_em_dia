@@ -1,0 +1,107 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Resumo mensal | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h1 class="h4 mb-1">Resumo mensal</h1>
+        <p class="text-muted mb-0">Consolidacao por categoria no periodo selecionado.</p>
+    </div>
+    <form class="row g-2" method="get">
+        <div class="col-auto">
+            <select class="form-select" name="month">
+                {% for value, label in month_options %}
+                    <option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <input class="form-control" type="number" min="2000" max="2100" name="year" value="{{ selected_year }}">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" type="submit">Atualizar</button>
+        </div>
+    </form>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Receitas</p>
+            <h2 class="h4 text-success mb-0">R$ {{ total_income|floatformat:2 }}</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Despesas</p>
+            <h2 class="h4 text-danger mb-0">R$ {{ total_expense|floatformat:2 }}</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3 h-100 {% if balance < 0 %}border-danger{% else %}border-success{% endif %}">
+            <p class="text-muted mb-1">Saldo</p>
+            <h2 class="h4 mb-0 {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">R$ {{ balance|floatformat:2 }}</h2>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card p-3 h-100">
+            <h3 class="h6 mb-3">Totais por categoria (receitas)</h3>
+            {% if income_totals %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Categoria</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in income_totals %}
+                                <tr>
+                                    <td>{{ item.category__name }}</td>
+                                    <td class="text-end">R$ {{ item.total|floatformat:2 }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">Nenhuma receita no periodo.</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card p-3 h-100">
+            <h3 class="h6 mb-3">Despesas por categoria</h3>
+            {% if expense_percentages %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Categoria</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Percentual</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in expense_percentages %}
+                                <tr>
+                                    <td>{{ item.category_name }}</td>
+                                    <td class="text-end">R$ {{ item.total|floatformat:2 }}</td>
+                                    <td class="text-end">{{ item.percentage|floatformat:2 }}%</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">Nenhuma despesa no periodo.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

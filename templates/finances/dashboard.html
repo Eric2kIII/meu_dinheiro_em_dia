@@ -1,0 +1,175 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Dashboard | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h1 class="h4 mb-1">Dashboard financeiro</h1>
+        <p class="text-muted mb-0">Visao rapida do mes selecionado.</p>
+    </div>
+    <form class="row g-2" method="get">
+        <div class="col-auto">
+            <select class="form-select" name="month">
+                {% for value, label in month_options %}
+                    <option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <input class="form-control" type="number" name="year" min="2000" max="2100" value="{{ selected_year }}">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-funnel me-1"></i>Aplicar</button>
+        </div>
+    </form>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Receitas no mes</p>
+            <h2 class="h4 mb-0 text-success">R$ {{ total_income|floatformat:2 }}</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Despesas no mes</p>
+            <h2 class="h4 mb-0 text-danger">R$ {{ total_expense|floatformat:2 }}</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Saldo no mes</p>
+            <h2 class="h4 mb-0 {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">R$ {{ balance|floatformat:2 }}</h2>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-5">
+        <div class="card p-3 h-100">
+            <h3 class="h6 mb-3">Despesas por categoria</h3>
+            {% if expense_values %}
+                <canvas id="expenseChart" height="220"></canvas>
+            {% else %}
+                <div class="empty-state">Nenhuma despesa encontrada para o periodo.</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card p-3 h-100">
+            <h3 class="h6 mb-3">Evolucao dos ultimos 6 meses</h3>
+            <canvas id="evolutionChart" height="220"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3 class="h6 mb-0">Lancamentos recentes</h3>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'finances:transaction_list' %}">Ver todos</a>
+    </div>
+    {% if recent_transactions %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descricao</th>
+                        <th>Categoria</th>
+                        <th>Tipo</th>
+                        <th class="text-end">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recent_transactions %}
+                        <tr>
+                            <td>{{ item.date|date:'d/m/Y' }}</td>
+                            <td>{{ item.description|default:'-' }}</td>
+                            <td>{{ item.category.name }}</td>
+                            <td>
+                                {% if item.type == 'INCOME' %}
+                                    <span class="badge bg-success-subtle text-success-emphasis">Receita</span>
+                                {% else %}
+                                    <span class="badge bg-danger-subtle text-danger-emphasis">Despesa</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">R$ {{ item.amount|floatformat:2 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">Nenhum lancamento encontrado para este periodo.</div>
+    {% endif %}
+</div>
+
+{{ expense_labels|json_script:'expense-labels-data' }}
+{{ expense_values|json_script:'expense-values-data' }}
+{{ evolution_labels|json_script:'evolution-labels-data' }}
+{{ evolution_income|json_script:'evolution-income-data' }}
+{{ evolution_expense|json_script:'evolution-expense-data' }}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+    const expenseLabels = JSON.parse(document.getElementById('expense-labels-data').textContent);
+    const expenseValues = JSON.parse(document.getElementById('expense-values-data').textContent);
+    const evolutionLabels = JSON.parse(document.getElementById('evolution-labels-data').textContent);
+    const evolutionIncome = JSON.parse(document.getElementById('evolution-income-data').textContent);
+    const evolutionExpense = JSON.parse(document.getElementById('evolution-expense-data').textContent);
+
+    if (expenseLabels.length > 0) {
+        new Chart(document.getElementById('expenseChart'), {
+            type: 'pie',
+            data: {
+                labels: expenseLabels,
+                datasets: [{
+                    data: expenseValues,
+                    backgroundColor: ['#1f6f8b', '#2b9348', '#c0392b', '#f4a261', '#457b9d', '#8d99ae'],
+                }],
+            },
+            options: {
+                plugins: {
+                    legend: { position: 'bottom' },
+                },
+            },
+        });
+    }
+
+    new Chart(document.getElementById('evolutionChart'), {
+        type: 'line',
+        data: {
+            labels: evolutionLabels,
+            datasets: [
+                {
+                    label: 'Receitas',
+                    data: evolutionIncome,
+                    borderColor: '#2b9348',
+                    backgroundColor: 'rgba(43, 147, 72, 0.15)',
+                    tension: 0.3,
+                    fill: true,
+                },
+                {
+                    label: 'Despesas',
+                    data: evolutionExpense,
+                    borderColor: '#c0392b',
+                    backgroundColor: 'rgba(192, 57, 43, 0.15)',
+                    tension: 0.3,
+                    fill: true,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+            },
+        },
+    });
+</script>
+{% endblock %}
