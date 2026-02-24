@@ -1,0 +1,35 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Importar categorias | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <h1 class="h5 mb-3">Importacao em massa de categorias</h1>
+            <p class="text-muted mb-3">Envie um arquivo CSV ou XLSX com colunas pre-formatadas.</p>
+
+            <div class="alert alert-info mb-4">
+                <strong>Formato esperado:</strong> <code>name</code>, <code>type</code><br>
+                <strong>Valores de type:</strong> <code>INCOME</code> ou <code>EXPENSE</code>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form.file.id_for_label }}">{{ form.file.label }}</label>
+                    {{ form.file }}
+                    {% if form.file.errors %}
+                        <div class="text-danger small mt-1">{{ form.file.errors|join:', ' }}</div>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-1"></i>Importar</button>
+                    <a class="btn btn-outline-secondary" href="{% url 'finances:category_import_template' %}">Baixar modelo CSV</a>
+                    <a class="btn btn-outline-secondary" href="{% url 'finances:category_list' %}">Voltar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

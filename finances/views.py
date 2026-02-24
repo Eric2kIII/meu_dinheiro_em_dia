@@ -1,4 +1,5 @@
 ﻿import csv
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
@@ -9,10 +10,25 @@ from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 
-from .forms import CategoryForm, TransactionForm
-from .models import Category, Transaction
+from .forms import (
+    CategoryForm,
+    CreditCardExpenseForm,
+    CreditCardForm,
+    CreditCardPaymentForm,
+    ImportFileForm,
+    TransactionForm,
+)
+from .importers import import_categories_from_file, import_transactions_from_file
+from .models import Category, CreditCard, CreditCardExpense, CreditCardPayment, Transaction
 
 MONTH_OPTIONS = [
     (1, 'Janeiro'),
@@ -86,6 +102,85 @@ def apply_transaction_filters(queryset, params, fallback_to_current=False):
     }
 
 
+def combine_category_totals(*querysets):
+    combined = defaultdict(lambda: Decimal('0'))
+    for queryset in querysets:
+        for item in queryset:
+            name = item.get('category__name') or 'Sem categoria'
+            combined[name] += item.get('total') or Decimal('0')
+
+    totals = [{'category_name': name, 'total': total} for name, total in combined.items()]
+    totals.sort(key=lambda item: item['total'], reverse=True)
+    return totals
+
+
+def build_credit_card_summary(user, selected_month, selected_year):
+    cards = CreditCard.objects.filter(user=user).order_by('name')
+
+    month_expenses = CreditCardExpense.objects.filter(
+        user=user,
+        date__month=selected_month,
+        date__year=selected_year,
+    )
+    month_payments = CreditCardPayment.objects.filter(
+        user=user,
+        date__month=selected_month,
+        date__year=selected_year,
+    )
+
+    expense_totals = {
+        item['card_id']: item['total'] or Decimal('0')
+        for item in month_expenses.values('card_id').annotate(total=Sum('amount'))
+    }
+    payment_totals = {
+        item['card_id']: item['total'] or Decimal('0')
+        for item in month_payments.values('card_id').annotate(total=Sum('amount'))
+    }
+
+    card_summaries = []
+    for card in cards:
+        expense_total = expense_totals.get(card.id, Decimal('0'))
+        payment_total = payment_totals.get(card.id, Decimal('0'))
+        card_summaries.append(
+            {
+                'card': card,
+                'expense_total': expense_total,
+                'payment_total': payment_total,
+                'open_balance': expense_total - payment_total,
+            }
+        )
+
+    total_expense = sum((item['expense_total'] for item in card_summaries), Decimal('0'))
+    total_payment = sum((item['payment_total'] for item in card_summaries), Decimal('0'))
+
+    return {
+        'card_summaries': card_summaries,
+        'total_expense': total_expense,
+        'total_payment': total_payment,
+        'expenses_queryset': month_expenses,
+        'payments_queryset': month_payments,
+    }
+
+
+def add_import_messages(request, report, entity_label):
+    messages.success(
+        request,
+        f'Importacao de {entity_label} concluida: {report.get("created", 0)} itens criados.',
+    )
+
+    skipped = report.get('skipped', 0)
+    if skipped:
+        messages.info(request, f'{skipped} itens ignorados por ja existirem.')
+
+    errors = report.get('errors', [])
+    if errors:
+        preview = errors[:5]
+        for error_message in preview:
+            messages.error(request, error_message)
+        if len(errors) > len(preview):
+            messages.warning(request, f'Foram encontrados mais {len(errors) - len(preview)} erros.')
+
+
 class UserOwnedQuerysetMixin(LoginRequiredMixin):
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -109,21 +204,35 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         selected_year = filters['year']
 
         total_income = current_transactions.filter(type=Transaction.Type.INCOME).aggregate(total=Sum('amount'))['total']
-        total_expense = current_transactions.filter(type=Transaction.Type.EXPENSE).aggregate(total=Sum('amount'))['total']
+        transaction_expense_total = current_transactions.filter(type=Transaction.Type.EXPENSE).aggregate(total=Sum('amount'))['total']
 
         total_income = total_income or Decimal('0')
-        total_expense = total_expense or Decimal('0')
+        transaction_expense_total = transaction_expense_total or Decimal('0')
+
+        card_context = build_credit_card_summary(self.request.user, selected_month, selected_year)
+        card_expense_total = card_context['total_expense']
+
+        total_expense = transaction_expense_total + card_expense_total
         balance = total_income - total_expense
 
-        expenses_by_category = (
+        transaction_expenses_by_category = (
             current_transactions.filter(type=Transaction.Type.EXPENSE)
             .values('category__name')
             .annotate(total=Sum('amount'))
             .order_by('-total')
         )
-
-        expense_labels = [item['category__name'] for item in expenses_by_category]
-        expense_values = [float(item['total']) for item in expenses_by_category]
+        card_expenses_by_category = (
+            card_context['expenses_queryset']
+            .values('category__name')
+            .annotate(total=Sum('amount'))
+            .order_by('-total')
+        )
+        combined_expenses_by_category = combine_category_totals(
+            transaction_expenses_by_category,
+            card_expenses_by_category,
+        )
+        expense_labels = [item['category_name'] for item in combined_expenses_by_category]
+        expense_values = [float(item['total']) for item in combined_expenses_by_category]
 
         month_series = build_last_months(selected_year, selected_month, total=6)
         evolution_labels = []
@@ -134,9 +243,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             month_transactions = user_transactions.filter(date__year=year, date__month=month)
             month_income = month_transactions.filter(type=Transaction.Type.INCOME).aggregate(total=Sum('amount'))['total']
             month_expense = month_transactions.filter(type=Transaction.Type.EXPENSE).aggregate(total=Sum('amount'))['total']
+            month_card_expense = CreditCardExpense.objects.filter(
+                user=self.request.user,
+                date__year=year,
+                date__month=month,
+            ).aggregate(total=Sum('amount'))['total']
+
             evolution_labels.append(f'{month:02d}/{year}')
             evolution_income.append(float(month_income or Decimal('0')))
-            evolution_expense.append(float(month_expense or Decimal('0')))
+            evolution_expense.append(float((month_expense or Decimal('0')) + (month_card_expense or Decimal('0'))))
 
         context.update(
             {
@@ -146,12 +261,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'total_income': total_income,
                 'total_expense': total_expense,
                 'balance': balance,
+                'transaction_expense_total': transaction_expense_total,
+                'credit_card_expense_total': card_expense_total,
+                'credit_card_payment_total': card_context['total_payment'],
                 'recent_transactions': current_transactions.select_related('category')[:10],
                 'expense_labels': expense_labels,
                 'expense_values': expense_values,
                 'evolution_labels': evolution_labels,
                 'evolution_income': evolution_income,
                 'evolution_expense': evolution_expense,
+                'card_summaries': card_context['card_summaries'],
             }
         )
         return context
@@ -213,6 +332,17 @@ class CategoryCreateView(LoginRequiredMixin, CreateView):
         return str(self.success_url)
 
 
+class CategoryImportView(LoginRequiredMixin, FormView):
+    template_name = 'finances/category_import.html'
+    form_class = ImportFileForm
+    success_url = reverse_lazy('finances:category_list')
+
+    def form_valid(self, form):
+        report = import_categories_from_file(form.cleaned_data['file'], self.request.user)
+        add_import_messages(self.request, report, 'categorias')
+        return super().form_valid(form)
+
+
 class CategoryUpdateView(UserOwnedQuerysetMixin, UpdateView):
     template_name = 'finances/category_form.html'
     model = Category
@@ -237,6 +367,18 @@ class CategoryDeleteView(UserOwnedQuerysetMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, 'Categoria removida com sucesso.')
         return super().form_valid(form)
+
+
+@login_required
+def download_category_import_template(request):
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="modelo_categorias.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['name', 'type'])
+    writer.writerow(['Salario', 'INCOME'])
+    writer.writerow(['Alimentacao', 'EXPENSE'])
+    return response
 
 
 class TransactionListView(UserOwnedQuerysetMixin, ListView):
@@ -298,6 +440,17 @@ class TransactionCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
+class TransactionImportView(LoginRequiredMixin, FormView):
+    template_name = 'finances/transaction_import.html'
+    form_class = ImportFileForm
+    success_url = reverse_lazy('finances:transaction_list')
+
+    def form_valid(self, form):
+        report = import_transactions_from_file(form.cleaned_data['file'], self.request.user)
+        add_import_messages(self.request, report, 'lancamentos')
+        return super().form_valid(form)
+
+
 class TransactionUpdateView(UserOwnedQuerysetMixin, UpdateView):
     template_name = 'finances/transaction_form.html'
     model = Transaction
@@ -338,6 +491,164 @@ class TransactionDeleteView(UserOwnedQuerysetMixin, DeleteView):
         return super().form_valid(form)
 
 
+@login_required
+def download_transaction_import_template(request):
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="modelo_lancamentos.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['type', 'amount', 'date', 'category', 'description', 'notes', 'is_recurring'])
+    writer.writerow(['INCOME', '5200.00', '2026-02-05', 'Salario', 'Recebimento mensal', '', 'false'])
+    writer.writerow(['EXPENSE', '89.90', '2026-02-07', 'Alimentacao', 'Mercado', 'Compra semanal', 'false'])
+    return response
+
+
+class CreditCardOverviewView(LoginRequiredMixin, TemplateView):
+    template_name = 'finances/credit_card_overview.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        today = date.today()
+
+        selected_month = parse_positive_int(self.request.GET.get('month'), default=today.month, minimum=1, maximum=12)
+        selected_year = parse_positive_int(self.request.GET.get('year'), default=today.year, minimum=2000, maximum=2100)
+
+        card_context = build_credit_card_summary(self.request.user, selected_month, selected_year)
+
+        context.update(
+            {
+                'month_options': MONTH_OPTIONS,
+                'selected_month': selected_month,
+                'selected_year': selected_year,
+                'card_summaries': card_context['card_summaries'],
+                'credit_card_expense_total': card_context['total_expense'],
+                'credit_card_payment_total': card_context['total_payment'],
+                'recent_card_expenses': card_context['expenses_queryset'].select_related('card', 'category')[:10],
+                'recent_card_payments': card_context['payments_queryset'].select_related('card')[:10],
+            }
+        )
+        return context
+
+
+class CreditCardCreateView(LoginRequiredMixin, CreateView):
+    template_name = 'finances/credit_card_form.html'
+    model = CreditCard
+    form_class = CreditCardForm
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        messages.success(self.request, 'Cartao cadastrado com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardUpdateView(UserOwnedQuerysetMixin, UpdateView):
+    template_name = 'finances/credit_card_form.html'
+    model = CreditCard
+    form_class = CreditCardForm
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Cartao atualizado com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardDeleteView(UserOwnedQuerysetMixin, DeleteView):
+    template_name = 'finances/credit_card_confirm_delete.html'
+    model = CreditCard
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Cartao removido com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardExpenseCreateView(LoginRequiredMixin, CreateView):
+    template_name = 'finances/credit_card_expense_form.html'
+    model = CreditCardExpense
+    form_class = CreditCardExpenseForm
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        messages.success(self.request, 'Despesa de cartao registrada com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardExpenseUpdateView(UserOwnedQuerysetMixin, UpdateView):
+    template_name = 'finances/credit_card_expense_form.html'
+    model = CreditCardExpense
+    form_class = CreditCardExpenseForm
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Despesa de cartao atualizada com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardExpenseDeleteView(UserOwnedQuerysetMixin, DeleteView):
+    template_name = 'finances/credit_card_expense_confirm_delete.html'
+    model = CreditCardExpense
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Despesa de cartao removida com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardPaymentCreateView(LoginRequiredMixin, CreateView):
+    template_name = 'finances/credit_card_payment_form.html'
+    model = CreditCardPayment
+    form_class = CreditCardPaymentForm
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        messages.success(self.request, 'Pagamento de cartao registrado com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardPaymentUpdateView(UserOwnedQuerysetMixin, UpdateView):
+    template_name = 'finances/credit_card_payment_form.html'
+    model = CreditCardPayment
+    form_class = CreditCardPaymentForm
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Pagamento de cartao atualizado com sucesso.')
+        return super().form_valid(form)
+
+
+class CreditCardPaymentDeleteView(UserOwnedQuerysetMixin, DeleteView):
+    template_name = 'finances/credit_card_payment_confirm_delete.html'
+    model = CreditCardPayment
+    success_url = reverse_lazy('finances:credit_card_overview')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Pagamento de cartao removido com sucesso.')
+        return super().form_valid(form)
+
+
 class MonthlySummaryView(LoginRequiredMixin, TemplateView):
     template_name = 'finances/monthly_summary.html'
 
@@ -355,10 +666,14 @@ class MonthlySummaryView(LoginRequiredMixin, TemplateView):
         )
 
         total_income = month_transactions.filter(type=Transaction.Type.INCOME).aggregate(total=Sum('amount'))['total']
-        total_expense = month_transactions.filter(type=Transaction.Type.EXPENSE).aggregate(total=Sum('amount'))['total']
+        transaction_expense_total = month_transactions.filter(type=Transaction.Type.EXPENSE).aggregate(total=Sum('amount'))['total']
 
         total_income = total_income or Decimal('0')
-        total_expense = total_expense or Decimal('0')
+        transaction_expense_total = transaction_expense_total or Decimal('0')
+
+        card_context = build_credit_card_summary(self.request.user, selected_month, selected_year)
+
+        total_expense = transaction_expense_total + card_context['total_expense']
         balance = total_income - total_expense
 
         income_totals = (
@@ -367,19 +682,27 @@ class MonthlySummaryView(LoginRequiredMixin, TemplateView):
             .annotate(total=Sum('amount'))
             .order_by('-total')
         )
-        expense_totals = (
+        transaction_expense_totals = (
             month_transactions.filter(type=Transaction.Type.EXPENSE)
             .values('category__name')
             .annotate(total=Sum('amount'))
             .order_by('-total')
         )
+        card_expense_totals = (
+            card_context['expenses_queryset']
+            .values('category__name')
+            .annotate(total=Sum('amount'))
+            .order_by('-total')
+        )
+
+        merged_expense_totals = combine_category_totals(transaction_expense_totals, card_expense_totals)
 
         expense_percentages = []
-        for item in expense_totals:
+        for item in merged_expense_totals:
             percentage = (item['total'] / total_expense * 100) if total_expense else Decimal('0')
             expense_percentages.append(
                 {
-                    'category_name': item['category__name'],
+                    'category_name': item['category_name'],
                     'total': item['total'],
                     'percentage': float(round(percentage, 2)),
                 }
@@ -393,9 +716,12 @@ class MonthlySummaryView(LoginRequiredMixin, TemplateView):
                 'total_income': total_income,
                 'total_expense': total_expense,
                 'balance': balance,
+                'transaction_expense_total': transaction_expense_total,
+                'credit_card_expense_total': card_context['total_expense'],
+                'credit_card_payment_total': card_context['total_payment'],
                 'income_totals': income_totals,
-                'expense_totals': expense_totals,
                 'expense_percentages': expense_percentages,
+                'card_summaries': card_context['card_summaries'],
             }
         )
         return context

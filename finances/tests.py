@@ -3,11 +3,13 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
 from .forms import TransactionForm
-from .models import Category, Transaction
+from .importers import import_categories_from_file, import_transactions_from_file
+from .models import Category, CreditCard, CreditCardExpense, Transaction
 
 
 class TransactionValidationTests(TestCase):
@@ -76,3 +78,88 @@ class TransactionFormTests(TestCase):
         form = TransactionForm(user=self.user, data={'type': Transaction.Type.EXPENSE})
         category_ids = list(form.fields['category'].queryset.values_list('id', flat=True))
         self.assertEqual(category_ids, [self.expense_category.id])
+
+
+class ImporterTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='importuser', password='password123')
+
+    def test_category_import_creates_rows(self):
+        uploaded = SimpleUploadedFile(
+            'categorias.csv',
+            b'name,type\nSalario,INCOME\nMercado,EXPENSE\n',
+            content_type='text/csv',
+        )
+
+        report = import_categories_from_file(uploaded, self.user)
+
+        self.assertEqual(report['created'], 2)
+        self.assertEqual(Category.objects.filter(user=self.user).count(), 2)
+
+    def test_transaction_import_creates_rows(self):
+        Category.objects.create(user=self.user, name='Salario', type=Category.Type.INCOME)
+        Category.objects.create(user=self.user, name='Alimentacao', type=Category.Type.EXPENSE)
+
+        uploaded = SimpleUploadedFile(
+            'lancamentos.csv',
+            (
+                'type,amount,date,category,description,notes,is_recurring\n'
+                'INCOME,5000,2026-02-01,Salario,Recebimento,,false\n'
+                'EXPENSE,120.90,2026-02-02,Alimentacao,Mercado,,false\n'
+            ).encode('utf-8'),
+            content_type='text/csv',
+        )
+
+        report = import_transactions_from_file(uploaded, self.user)
+
+        self.assertEqual(report['created'], 2)
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 2)
+
+
+class CreditCardTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='carduser', password='password123')
+        self.income_category = Category.objects.create(user=self.user, name='Salario', type=Category.Type.INCOME)
+        self.expense_category = Category.objects.create(user=self.user, name='Mercado', type=Category.Type.EXPENSE)
+        self.card = CreditCard.objects.create(user=self.user, name='Cartao Azul')
+
+    def test_credit_card_expense_requires_expense_category(self):
+        expense = CreditCardExpense(
+            user=self.user,
+            card=self.card,
+            category=self.income_category,
+            amount=Decimal('80.00'),
+            date=date.today(),
+        )
+        with self.assertRaises(ValidationError):
+            expense.full_clean()
+
+    def test_dashboard_includes_credit_card_expenses(self):
+        Transaction.objects.create(
+            user=self.user,
+            type=Transaction.Type.INCOME,
+            category=self.income_category,
+            amount=Decimal('1000.00'),
+            date=date.today(),
+        )
+        Transaction.objects.create(
+            user=self.user,
+            type=Transaction.Type.EXPENSE,
+            category=self.expense_category,
+            amount=Decimal('100.00'),
+            date=date.today(),
+        )
+        CreditCardExpense.objects.create(
+            user=self.user,
+            card=self.card,
+            category=self.expense_category,
+            amount=Decimal('200.00'),
+            date=date.today(),
+            description='Compra no cartao',
+        )
+
+        self.client.login(username='carduser', password='password123')
+        response = self.client.get(reverse('finances:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_expense'], Decimal('300.00'))

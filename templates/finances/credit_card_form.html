@@ -1,12 +1,12 @@
 ﻿{% extends 'base.html' %}
 
-{% block title %}Categoria | Meu Dinheiro em Dia{% endblock %}
+{% block title %}Cartao | Meu Dinheiro em Dia{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-6">
+    <div class="col-lg-7">
         <div class="card p-4">
-            <h1 class="h5 mb-3">{{ view.object|yesno:'Editar categoria,Nova categoria' }}</h1>
+            <h1 class="h5 mb-3">{{ view.object|yesno:'Editar cartao,Novo cartao' }}</h1>
             <form method="post" novalidate>
                 {% csrf_token %}
                 {% for field in form %}
@@ -18,9 +18,12 @@
                         {% endif %}
                     </div>
                 {% endfor %}
+                {% if form.non_field_errors %}
+                    <div class="text-danger small mb-3">{{ form.non_field_errors|join:', ' }}</div>
+                {% endif %}
                 <div class="d-flex gap-2">
                     <button class="btn btn-primary" type="submit"><i class="bi bi-check2 me-1"></i>Salvar</button>
-                    <a class="btn btn-outline-secondary" href="{% url 'finances:category_list' %}">Cancelar</a>
+                    <a class="btn btn-outline-secondary" href="{% url 'finances:credit_card_overview' %}">Cancelar</a>
                 </div>
             </form>
         </div>

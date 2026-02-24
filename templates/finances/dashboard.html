@@ -36,6 +36,9 @@
         <div class="card p-3 h-100">
             <p class="text-muted mb-1">Despesas no mes</p>
             <h2 class="h4 mb-0 text-danger">R$ {{ total_expense|floatformat:2 }}</h2>
+            <p class="small text-muted mb-0 mt-2">
+                Lancamentos: R$ {{ transaction_expense_total|floatformat:2 }} | Cartoes: R$ {{ credit_card_expense_total|floatformat:2 }}
+            </p>
         </div>
     </div>
     <div class="col-md-4">
@@ -67,6 +70,41 @@
             </div>
         </div>
     </div>
+</div>
+
+<div class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3 class="h6 mb-0">Cartoes de credito no mes</h3>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'finances:credit_card_overview' %}">Gerenciar cartoes</a>
+    </div>
+    {% if card_summaries %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Cartao</th>
+                        <th>Compras</th>
+                        <th>Pagamentos</th>
+                        <th>Aberto no mes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in card_summaries %}
+                        <tr>
+                            <td>{{ item.card.name }}</td>
+                            <td>R$ {{ item.expense_total|floatformat:2 }}</td>
+                            <td>R$ {{ item.payment_total|floatformat:2 }}</td>
+                            <td class="{% if item.open_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ item.open_balance|floatformat:2 }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">Nenhum cartao cadastrado para exibir resumo.</div>
+    {% endif %}
 </div>
 
 <div class="card p-3">

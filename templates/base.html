@@ -27,6 +27,7 @@
                         <li class="nav-item"><a class="nav-link" href="{% url 'finances:dashboard' %}">Dashboard</a></li>
                         <li class="nav-item"><a class="nav-link" href="{% url 'finances:transaction_list' %}">Lancamentos</a></li>
                         <li class="nav-item"><a class="nav-link" href="{% url 'finances:category_list' %}">Categorias</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'finances:credit_card_overview' %}">Cartoes</a></li>
                         <li class="nav-item"><a class="nav-link" href="{% url 'finances:monthly_summary' %}">Resumo mensal</a></li>
                     </ul>
                     <form method="post" action="{% url 'accounts:logout' %}" class="d-flex">

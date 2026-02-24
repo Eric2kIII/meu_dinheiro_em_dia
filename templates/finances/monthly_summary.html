@@ -36,6 +36,9 @@
         <div class="card p-3 h-100">
             <p class="text-muted mb-1">Despesas</p>
             <h2 class="h4 text-danger mb-0">R$ {{ total_expense|floatformat:2 }}</h2>
+            <p class="small text-muted mb-0 mt-2">
+                Lancamentos: R$ {{ transaction_expense_total|floatformat:2 }} | Cartoes: R$ {{ credit_card_expense_total|floatformat:2 }}
+            </p>
         </div>
     </div>
     <div class="col-md-4">
@@ -76,7 +79,7 @@
     </div>
     <div class="col-lg-6">
         <div class="card p-3 h-100">
-            <h3 class="h6 mb-3">Despesas por categoria</h3>
+            <h3 class="h6 mb-3">Despesas por categoria (inclui cartao)</h3>
             {% if expense_percentages %}
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
@@ -103,5 +106,37 @@
             {% endif %}
         </div>
     </div>
+</div>
+
+<div class="card p-3 mt-3">
+    <h3 class="h6 mb-3">Resumo por cartao no mes</h3>
+    {% if card_summaries %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Cartao</th>
+                        <th class="text-end">Compras</th>
+                        <th class="text-end">Pagamentos</th>
+                        <th class="text-end">Aberto no mes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in card_summaries %}
+                        <tr>
+                            <td>{{ item.card.name }}</td>
+                            <td class="text-end">R$ {{ item.expense_total|floatformat:2 }}</td>
+                            <td class="text-end">R$ {{ item.payment_total|floatformat:2 }}</td>
+                            <td class="text-end {% if item.open_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ item.open_balance|floatformat:2 }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">Nenhum cartao cadastrado.</div>
+    {% endif %}
 </div>
 {% endblock %}
