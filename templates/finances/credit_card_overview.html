@@ -1,0 +1,176 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Cartoes de credito | Meu Dinheiro em Dia{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">Gestao de cartoes de credito</h1>
+        <p class="text-muted mb-0">Cadastre cartoes, despesas e pagamentos.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" href="{% url 'finances:credit_card_expense_create' %}">
+            <i class="bi bi-cart-plus me-1"></i>Nova despesa
+        </a>
+        <a class="btn btn-outline-success" href="{% url 'finances:credit_card_payment_create' %}">
+            <i class="bi bi-cash-coin me-1"></i>Novo pagamento
+        </a>
+        <a class="btn btn-primary" href="{% url 'finances:credit_card_create' %}">
+            <i class="bi bi-credit-card-2-front me-1"></i>Novo cartao
+        </a>
+    </div>
+</div>
+
+<form class="card p-3 mb-3" method="get">
+    <div class="row g-2 align-items-end">
+        <div class="col-sm-6 col-md-3">
+            <label class="form-label">Mes</label>
+            <select class="form-select" name="month">
+                {% for value, label in month_options %}
+                    <option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <label class="form-label">Ano</label>
+            <input class="form-control" type="number" min="2000" max="2100" name="year" value="{{ selected_year }}">
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-outline-primary" type="submit">Aplicar</button>
+        </div>
+    </div>
+</form>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Total de compras no cartao</p>
+            <h2 class="h4 mb-0 text-danger">R$ {{ credit_card_expense_total|floatformat:2 }}</h2>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card p-3 h-100">
+            <p class="text-muted mb-1">Total pago no mes</p>
+            <h2 class="h4 mb-0 text-success">R$ {{ credit_card_payment_total|floatformat:2 }}</h2>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-4">
+    <h3 class="h6 mb-3">Resumo por cartao</h3>
+    {% if card_summaries %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Cartao</th>
+                        <th>Compras</th>
+                        <th>Pagamentos</th>
+                        <th>Aberto no mes</th>
+                        <th class="text-end">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in card_summaries %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.card.name }}</strong>
+                                <div class="small text-muted">
+                                    {% if item.card.brand %}{{ item.card.brand }}{% endif %}
+                                    {% if item.card.last_four_digits %} • **** {{ item.card.last_four_digits }}{% endif %}
+                                </div>
+                            </td>
+                            <td>R$ {{ item.expense_total|floatformat:2 }}</td>
+                            <td>R$ {{ item.payment_total|floatformat:2 }}</td>
+                            <td class="{% if item.open_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ item.open_balance|floatformat:2 }}
+                            </td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-secondary" href="{% url 'finances:credit_card_update' item.card.pk %}"><i class="bi bi-pencil"></i></a>
+                                <a class="btn btn-sm btn-outline-danger" href="{% url 'finances:credit_card_delete' item.card.pk %}"><i class="bi bi-trash"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">Nenhum cartao cadastrado.</div>
+    {% endif %}
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card p-3 h-100">
+            <h3 class="h6 mb-3">Despesas recentes</h3>
+            {% if recent_card_expenses %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Cartao</th>
+                                <th>Categoria</th>
+                                <th>Descricao</th>
+                                <th class="text-end">Valor</th>
+                                <th class="text-end">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for expense in recent_card_expenses %}
+                                <tr>
+                                    <td>{{ expense.date|date:'d/m/Y' }}</td>
+                                    <td>{{ expense.card.name }}</td>
+                                    <td>{{ expense.category.name }}</td>
+                                    <td>{{ expense.description|default:'-' }}</td>
+                                    <td class="text-end">R$ {{ expense.amount|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'finances:credit_card_expense_update' expense.pk %}"><i class="bi bi-pencil"></i></a>
+                                        <a class="btn btn-sm btn-outline-danger" href="{% url 'finances:credit_card_expense_delete' expense.pk %}"><i class="bi bi-trash"></i></a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">Nenhuma despesa de cartao no periodo.</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card p-3 h-100">
+            <h3 class="h6 mb-3">Pagamentos recentes</h3>
+            {% if recent_card_payments %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Cartao</th>
+                                <th class="text-end">Valor</th>
+                                <th class="text-end">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in recent_card_payments %}
+                                <tr>
+                                    <td>{{ payment.date|date:'d/m/Y' }}</td>
+                                    <td>{{ payment.card.name }}</td>
+                                    <td class="text-end">R$ {{ payment.amount|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'finances:credit_card_payment_update' payment.pk %}"><i class="bi bi-pencil"></i></a>
+                                        <a class="btn btn-sm btn-outline-danger" href="{% url 'finances:credit_card_payment_delete' payment.pk %}"><i class="bi bi-trash"></i></a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">Nenhum pagamento de cartao no periodo.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -9,6 +9,12 @@
         <p class="text-muted mb-0">Controle detalhado de receitas e despesas.</p>
     </div>
     <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'finances:transaction_import_template' %}">
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo CSV
+        </a>
+        <a class="btn btn-outline-primary" href="{% url 'finances:transaction_import' %}">
+            <i class="bi bi-upload me-1"></i>Importar
+        </a>
         <a class="btn btn-outline-secondary" href="{% url 'finances:transaction_export_csv' %}?{{ request.GET.urlencode }}">
             <i class="bi bi-download me-1"></i>Exportar CSV
         </a>

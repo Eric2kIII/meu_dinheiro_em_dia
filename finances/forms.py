@@ -1,6 +1,8 @@
-﻿from django import forms
+﻿from datetime import date
 
-from .models import Category, Transaction
+from django import forms
+
+from .models import Category, CreditCard, CreditCardExpense, CreditCardPayment, Transaction
 
 
 class CategoryForm(forms.ModelForm):
@@ -34,6 +36,21 @@ class CategoryForm(forms.ModelForm):
         return cleaned_data
 
 
+class ImportFileForm(forms.Form):
+    file = forms.FileField(label='Arquivo')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['file'].widget.attrs['class'] = 'form-control'
+
+    def clean_file(self):
+        uploaded_file = self.cleaned_data['file']
+        filename = uploaded_file.name.lower()
+        if not filename.endswith('.csv') and not filename.endswith('.xlsx'):
+            raise forms.ValidationError('Formato invalido. Use arquivo CSV ou XLSX.')
+        return uploaded_file
+
+
 class TransactionForm(forms.ModelForm):
     class Meta:
         model = Transaction
@@ -59,7 +76,7 @@ class TransactionForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if field_name == 'is_recurring':
                 field.widget.attrs['class'] = 'form-check-input'
-            elif field_name == 'type' or field_name == 'category':
+            elif field_name in {'type', 'category'}:
                 field.widget.attrs['class'] = 'form-select'
             else:
                 field.widget.attrs['class'] = 'form-control'
@@ -96,3 +113,95 @@ class TransactionForm(forms.ModelForm):
             self.add_error('category', 'A categoria precisa ter o mesmo tipo do lancamento.')
 
         return cleaned_data
+
+
+class CreditCardForm(forms.ModelForm):
+    class Meta:
+        model = CreditCard
+        fields = ['name', 'brand', 'last_four_digits', 'limit_amount', 'closing_day', 'due_day']
+        widgets = {
+            'limit_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = {
+            'name': 'Nome do cartao',
+            'brand': 'Bandeira',
+            'last_four_digits': 'Ultimos 4 digitos',
+            'limit_amount': 'Limite',
+            'closing_day': 'Dia de fechamento',
+            'due_day': 'Dia de vencimento',
+        }
+        for field_name, field in self.fields.items():
+            field.label = labels.get(field_name, field.label)
+            field.widget.attrs['class'] = 'form-control'
+
+
+class CreditCardExpenseForm(forms.ModelForm):
+    class Meta:
+        model = CreditCardExpense
+        fields = ['card', 'category', 'amount', 'date', 'description', 'notes']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+        self.fields['card'].label = 'Cartao'
+        self.fields['category'].label = 'Categoria de despesa'
+        self.fields['amount'].label = 'Valor'
+        self.fields['date'].label = 'Data da compra'
+        self.fields['description'].label = 'Descricao'
+        self.fields['notes'].label = 'Observacao'
+
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
+
+        if self.user:
+            self.fields['card'].queryset = CreditCard.objects.filter(user=self.user).order_by('name')
+            self.fields['category'].queryset = Category.objects.filter(
+                user=self.user,
+                type=Category.Type.EXPENSE,
+            ).order_by('name')
+        else:
+            self.fields['card'].queryset = CreditCard.objects.none()
+            self.fields['category'].queryset = Category.objects.none()
+
+        if not self.instance.pk and not self.initial.get('date'):
+            self.initial['date'] = date.today()
+
+
+class CreditCardPaymentForm(forms.ModelForm):
+    class Meta:
+        model = CreditCardPayment
+        fields = ['card', 'amount', 'date', 'notes']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+        self.fields['card'].label = 'Cartao'
+        self.fields['amount'].label = 'Valor pago'
+        self.fields['date'].label = 'Data do pagamento'
+        self.fields['notes'].label = 'Observacao'
+
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
+
+        if self.user:
+            self.fields['card'].queryset = CreditCard.objects.filter(user=self.user).order_by('name')
+        else:
+            self.fields['card'].queryset = CreditCard.objects.none()
+
+        if not self.instance.pk and not self.initial.get('date'):
+            self.initial['date'] = date.today()

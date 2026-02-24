@@ -8,7 +8,17 @@
         <h1 class="h4 mb-1">Categorias</h1>
         <p class="text-muted mb-0">Organize receitas e despesas por grupo.</p>
     </div>
-    <a class="btn btn-primary" href="{% url 'finances:category_create' %}"><i class="bi bi-plus-lg me-1"></i>Nova categoria</a>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'finances:category_import_template' %}">
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo CSV
+        </a>
+        <a class="btn btn-outline-primary" href="{% url 'finances:category_import' %}">
+            <i class="bi bi-upload me-1"></i>Importar
+        </a>
+        <a class="btn btn-primary" href="{% url 'finances:category_create' %}">
+            <i class="bi bi-plus-lg me-1"></i>Nova categoria
+        </a>
+    </div>
 </div>
 
 <form method="get" class="card p-3 mb-3">
