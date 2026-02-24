@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
+from .forms import TransactionForm
 from .models import Category, Transaction
 
 
@@ -58,3 +59,20 @@ class OwnershipTests(TestCase):
         self.client.login(username='owner', password='password123')
         response = self.client.get(reverse('finances:transaction_update', args=[self.transaction_two.pk]))
         self.assertEqual(response.status_code, 404)
+
+
+class TransactionFormTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='formuser', password='password123')
+        self.income_category = Category.objects.create(user=self.user, name='Salario', type=Category.Type.INCOME)
+        self.expense_category = Category.objects.create(user=self.user, name='Mercado', type=Category.Type.EXPENSE)
+
+    def test_form_initial_type_filters_categories(self):
+        form = TransactionForm(user=self.user, initial={'type': Transaction.Type.INCOME})
+        category_ids = list(form.fields['category'].queryset.values_list('id', flat=True))
+        self.assertEqual(category_ids, [self.income_category.id])
+
+    def test_form_post_type_filters_categories(self):
+        form = TransactionForm(user=self.user, data={'type': Transaction.Type.EXPENSE})
+        category_ids = list(form.fields['category'].queryset.values_list('id', flat=True))
+        self.assertEqual(category_ids, [self.expense_category.id])

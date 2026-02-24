@@ -8,6 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.urls import reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
 from .forms import CategoryForm, TransactionForm
@@ -201,6 +202,16 @@ class CategoryCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, 'Categoria criada com sucesso.')
         return super().form_valid(form)
 
+    def get_success_url(self):
+        next_url = self.request.POST.get('next') or self.request.GET.get('next')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return str(self.success_url)
+
 
 class CategoryUpdateView(UserOwnedQuerysetMixin, UpdateView):
     template_name = 'finances/category_form.html'
@@ -259,12 +270,27 @@ class TransactionCreateView(LoginRequiredMixin, CreateView):
     def get_initial(self):
         initial = super().get_initial()
         initial['date'] = date.today()
+        initial['type'] = Transaction.Type.INCOME
         return initial
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        categories = Category.objects.filter(user=self.request.user).order_by('name')
+        context['category_options'] = [
+            {
+                'id': category.id,
+                'name': category.name,
+                'type': category.type,
+                'type_label': category.get_type_display(),
+            }
+            for category in categories
+        ]
+        return context
 
     def form_valid(self, form):
         form.instance.user = self.request.user
@@ -282,6 +308,20 @@ class TransactionUpdateView(UserOwnedQuerysetMixin, UpdateView):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        categories = Category.objects.filter(user=self.request.user).order_by('name')
+        context['category_options'] = [
+            {
+                'id': category.id,
+                'name': category.name,
+                'type': category.type,
+                'type_label': category.get_type_display(),
+            }
+            for category in categories
+        ]
+        return context
 
     def form_valid(self, form):
         messages.success(self.request, 'Lancamento atualizado com sucesso.')
